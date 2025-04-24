@@ -4,10 +4,8 @@ import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { MessageSquare, Send, X } from "lucide-react"
-import { createClientSupabaseClient } from "@/lib/supabase"
+import { Send } from "lucide-react"
 
 type Message = {
   role: "user" | "assistant"
@@ -25,7 +23,6 @@ type ConversationContext = {
 }
 
 export function DoctorChatbotWidget() {
-  const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -35,7 +32,9 @@ export function DoctorChatbotWidget() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [medicoNombre, setMedicoNombre] = useState("")
+  const [medicoId, setMedicoId] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
 
   // Estado para mantener el contexto de la conversación
   const [conversationContext, setConversationContext] = useState<ConversationContext>({
@@ -52,13 +51,14 @@ export function DoctorChatbotWidget() {
       const doctorNombre = localStorage.getItem("doctorNombre")
 
       if (doctorId && doctorNombre) {
+        setMedicoId(Number(doctorId))
         setMedicoNombre(doctorNombre)
 
         // Actualizar el mensaje de bienvenida para médicos
         setMessages([
           {
             role: "assistant",
-            content: `¡Bienvenido Dr(a). ${doctorNombre}! Soy su asistente virtual del Centro Médico. ¿En qué puedo ayudarle hoy?`,
+            content: `¡Bienvenido Dr(a). ${doctorNombre}! Soy su asistente virtual del Centro Médico. Puede preguntarme sobre sus citas diciendo "muestra mis citas de hoy" o "cuáles son mis próximas citas". ¿En qué puedo ayudarle?`,
           },
         ])
       }
@@ -67,7 +67,9 @@ export function DoctorChatbotWidget() {
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+    }
   }, [messages])
 
   // Función para extraer precios de un texto
@@ -166,6 +168,150 @@ export function DoctorChatbotWidget() {
     })
 
     return response
+  }
+
+  // Añadir esta función después de isPreguntaCitaPorNumero
+  const isPreguntaCitasDoctor = (
+    mensaje: string,
+  ): {
+    esPregunta: boolean
+    doctorId?: string
+    doctorNombre?: string
+    periodo?: string
+    estado?: string
+  } => {
+    // Convertir a minúsculas y eliminar acentos para facilitar la comparación
+    const mensajeLimpio = mensaje
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+
+    // Patrones para detectar preguntas sobre citas de doctores
+    const patrones = [
+      "citas del doctor",
+      "citas de la doctora",
+      "citas del dr",
+      "citas de la dra",
+      "citas que tengo",
+      "mis citas",
+      "mi agenda",
+      "mis pacientes",
+      "tengo citas",
+      "agenda del dia",
+      "agenda de hoy",
+      "citas para hoy",
+      "citas pendientes",
+      "citas programadas",
+      "citas completadas",
+      "citas realizadas",
+      "citas canceladas",
+      "proximas citas",
+      "citas proximas",
+      "citas futuras",
+      "citas pasadas",
+      "citas anteriores",
+      "historial de citas",
+    ]
+
+    // Verificar si algún patrón coincide
+    const esPregunta = patrones.some((patron) => mensajeLimpio.includes(patron))
+
+    if (!esPregunta) {
+      return { esPregunta: false }
+    }
+
+    // Extraer nombre del doctor si se menciona
+    let doctorNombre: string | undefined
+
+    // Patrones para nombres de doctores
+    const patronesNombreDoctor = [
+      /doctor[a]?\s+([a-zñáéíóúü\s]+)/i,
+      /dr[a]?\.\s+([a-zñáéíóúü\s]+)/i,
+      /del\s+doctor[a]?\s+([a-zñáéíóúü\s]+)/i,
+      /de\s+la\s+doctor[a]?\s+([a-zñáéíóúü\s]+)/i,
+      /del\s+dr[a]?\.\s+([a-zñáéíóúü\s]+)/i,
+      /de\s+la\s+dr[a]?\.\s+([a-zñáéíóúü\s]+)/i,
+    ]
+
+    for (const patron of patronesNombreDoctor) {
+      const coincidencia = mensajeLimpio.match(patron)
+      if (coincidencia && coincidencia[1]) {
+        doctorNombre = coincidencia[1].trim()
+        break
+      }
+    }
+
+    // Determinar el periodo de tiempo
+    let periodo: string | undefined
+
+    if (mensajeLimpio.includes("hoy") || mensajeLimpio.includes("dia")) {
+      periodo = "hoy"
+    } else if (
+      mensajeLimpio.includes("proxima") ||
+      mensajeLimpio.includes("futuras") ||
+      mensajeLimpio.includes("siguientes") ||
+      mensajeLimpio.includes("programadas")
+    ) {
+      periodo = "proximas"
+    } else if (
+      mensajeLimpio.includes("pasada") ||
+      mensajeLimpio.includes("anteriores") ||
+      mensajeLimpio.includes("historial") ||
+      mensajeLimpio.includes("realizadas")
+    ) {
+      periodo = "pasadas"
+    }
+
+    // Determinar el estado de las citas
+    let estado: string | undefined
+
+    if (mensajeLimpio.includes("pendiente")) {
+      estado = "pendiente"
+    } else if (mensajeLimpio.includes("completada") || mensajeLimpio.includes("realizada")) {
+      estado = "completada"
+    } else if (mensajeLimpio.includes("cancelada")) {
+      estado = "cancelada"
+    }
+
+    return {
+      esPregunta: true,
+      doctorNombre,
+      periodo,
+      estado,
+    }
+  }
+
+  // Añadir esta función después de consultarCitaPorNumero
+  const consultarCitasDoctor = async (doctorId?: string, doctorNombre?: string, estado?: string, periodo?: string) => {
+    try {
+      const response = await fetch("/api/chatbot/citas-doctor", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          doctorId,
+          doctorNombre,
+          estado,
+          periodo,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        if (response.status === 404) {
+          throw new Error(`No se encontró ningún doctor con el nombre ${doctorNombre}`)
+        } else {
+          throw new Error(data.error || "No se pudo encontrar las citas del doctor")
+        }
+      }
+
+      return data
+    } catch (error) {
+      console.error("Error al consultar citas del doctor:", error)
+      throw error
+    }
   }
 
   const isPreguntaCita = (
@@ -389,69 +535,19 @@ export function DoctorChatbotWidget() {
     }
   }
 
-  // Función para obtener respuesta de Groq a través del API
-  const obtenerRespuestaGroq = async (mensaje: string, contexto: string) => {
-    try {
-      const response = await fetch("/api/chatbot/groq", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mensaje,
-          contexto,
-          conversationHistory: messages.slice(-5), // Enviar las últimas 5 mensajes para contexto
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Error al obtener respuesta de Groq")
-      }
-
-      const { success, text, error } = await response.json()
-
-      if (!success || error) {
-        throw new Error(error || "Error en el servicio de Groq")
-      }
-
-      return text
-    } catch (error) {
-      console.error("Error al obtener respuesta de Groq:", error)
-      throw error
+  // Función para formatear la fecha en formato legible
+  const formatearFecha = (fechaStr: string): string => {
+    const fecha = new Date(fechaStr)
+    const opciones: Intl.DateTimeFormatOptions = {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     }
+    return fecha.toLocaleDateString("es-ES", opciones)
   }
 
-  // Función para obtener respuesta de fallback cuando falla la API de Groq
-  const obtenerRespuestaFallback = async (mensaje: string) => {
-    try {
-      const response = await fetch("/api/chatbot/fallback", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          query: mensaje,
-          conversationHistory: messages.slice(-5), // Enviar las últimas 5 mensajes para contexto
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Error al obtener respuesta de fallback")
-      }
-
-      const { success, text } = await response.json()
-
-      if (!success) {
-        throw new Error("Error en el servicio de fallback")
-      }
-
-      return text
-    } catch (error) {
-      console.error("Error al obtener respuesta de fallback:", error)
-      return "Lo siento, estoy teniendo problemas para responder. Por favor, intenta de nuevo o comunícate directamente al 4644-9158."
-    }
-  }
-
+  // Función para manejar el envío de mensajes
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -487,6 +583,117 @@ export function DoctorChatbotWidget() {
         setMessages((prev) => [...prev, { role: "assistant", content: totalResponse }])
         setIsLoading(false)
         return
+      }
+
+      // NUEVA VERIFICACIÓN: Verificar si está preguntando por citas del doctor
+      if (medicoId) {
+        const { esPregunta, periodo, estado } = isPreguntaCitasDoctor(userMessage)
+
+        if (esPregunta) {
+          try {
+            const citasData = await consultarCitasDoctor(String(medicoId), medicoNombre, estado, periodo)
+
+            if (citasData && citasData.data && citasData.data.length > 0) {
+              // Formatear la respuesta según el periodo
+              let periodoTexto = ""
+              switch (periodo) {
+                case "hoy":
+                  periodoTexto = "para hoy"
+                  break
+                case "proximas":
+                  periodoTexto = "próximas"
+                  break
+                case "pasadas":
+                  periodoTexto = "pasadas"
+                  break
+                default:
+                  periodoTexto = "programadas"
+              }
+
+              // Formatear el estado si existe
+              let estadoTexto = ""
+              if (estado) {
+                estadoTexto = ` con estado "${estado}"`
+              }
+
+              let respuesta = `Dr(a). ${medicoNombre}, tiene ${citasData.data.length} citas ${periodoTexto}${estadoTexto}:\n\n`
+
+              // Agrupar citas por fecha
+              const citasPorFecha: Record<string, any[]> = {}
+              citasData.data.forEach((cita: any) => {
+                if (!citasPorFecha[cita.fecha]) {
+                  citasPorFecha[cita.fecha] = []
+                }
+                citasPorFecha[cita.fecha].push(cita)
+              })
+
+              // Ordenar fechas
+              const fechasOrdenadas = Object.keys(citasPorFecha).sort()
+
+              // Mostrar citas agrupadas por fecha
+              fechasOrdenadas.forEach((fecha) => {
+                respuesta += `📅 ${formatearFecha(fecha)}:\n`
+
+                citasPorFecha[fecha].forEach((cita: any, index: number) => {
+                  respuesta += `${index + 1}. ${cita.hora} - ${cita.paciente?.nombre || "Paciente sin nombre"}\n`
+                  respuesta += `   Motivo: ${cita.motivo}\n`
+                  respuesta += `   Estado: ${cita.estado}\n`
+                  if (cita.numero_cita) {
+                    respuesta += `   Cita #: ${cita.numero_cita}\n`
+                  }
+                  respuesta += "\n"
+                })
+              })
+
+              setMessages((prev) => [...prev, { role: "assistant", content: respuesta }])
+              setIsLoading(false)
+              return
+            } else {
+              // No se encontraron citas
+              let periodoTexto = ""
+              switch (periodo) {
+                case "hoy":
+                  periodoTexto = "para hoy"
+                  break
+                case "proximas":
+                  periodoTexto = "próximas"
+                  break
+                case "pasadas":
+                  periodoTexto = "pasadas"
+                  break
+                default:
+                  periodoTexto = "programadas"
+              }
+
+              // Formatear el estado si existe
+              let estadoTexto = ""
+              if (estado) {
+                estadoTexto = ` con estado "${estado}"`
+              }
+
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: `Dr(a). ${medicoNombre}, no tiene citas ${periodoTexto}${estadoTexto}. ¿Puedo ayudarle con algo más?`,
+                },
+              ])
+              setIsLoading(false)
+              return
+            }
+          } catch (error) {
+            console.error("Error al consultar citas del doctor:", error)
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: `Lo siento, Dr(a). ${medicoNombre}, tuve un problema al consultar sus citas. Por favor, intente nuevamente o verifique directamente en el sistema.`,
+              },
+            ])
+            setIsLoading(false)
+            return
+          }
+        }
       }
 
       // Verificar si es una pregunta sobre citas
@@ -582,140 +789,63 @@ Para más detalles, puede revisar el expediente completo del paciente en el sist
       }
 
       try {
-        // Fetch relevant info from database
-        const supabase = createClientSupabaseClient()
+        // Procesar con el chatbot específico para doctores
+        const response = await fetch("/api/chatbot/groq-doctor", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mensaje: userMessage,
+            medicoNombre,
+            medicoId,
+            conversationHistory: messages.slice(-6), // Enviar solo las últimas 6 mensajes para contexto
+          }),
+        })
 
-        // Obtener información básica
-        const { data: infoMedica } = await supabase.from("info_medica").select("titulo, contenido")
-        const { data: precios } = await supabase.from("precios").select("*")
-        const { data: doctores } = await supabase.from("doctores").select("id, nombre, especialidad, email")
-        const { data: especialidades } = await supabase.from("especialidades").select("id, nombre, descripcion")
-
-        // Obtener estadísticas
-        const { data: estadisticas } = await supabase.from("estadisticas_diarias").select("*")
-
-        // Obtener información de seguros
-        const { data: seguros } = await supabase.from("seguros_medicos").select("*")
-
-        // Contar pacientes
-        const { count: pacientes } = await supabase.from("pacientes").select("*", { count: "exact", head: true })
-
-        // Obtener citas
-        const { data: citas } = await supabase.from("citas").select("*")
-
-        // Preparar información formateada para el chatbot
-        const infoMedicaText = infoMedica
-          ? infoMedica.map((item) => `${item.titulo}: ${item.contenido}`).join("\n\n")
-          : ""
-
-        const preciosText = precios
-          ? precios
-              .map(
-                (precio) =>
-                  `${precio.servicio}: Q${precio.precio.toFixed(2)} - ${precio.descripcion}${
-                    precio.duracion_minutos ? ` (Duración: ${precio.duracion_minutos} minutos)` : ""
-                  }`,
-              )
-              .join("\n")
-          : "No hay información de precios disponible."
-
-        const doctoresText = doctores
-          ? doctores.map((doctor) => `${doctor.nombre} - ${doctor.especialidad}`).join("\n")
-          : "No hay información de doctores disponible."
-
-        const especialidadesText = especialidades
-          ? especialidades.map((esp) => `${esp.nombre}: ${esp.descripcion}`).join("\n")
-          : "No hay información de especialidades disponible."
-
-        // Estadísticas
-        const pacientesPromedio =
-          estadisticas && estadisticas.length > 0
-            ? (estadisticas.reduce((sum, stat) => sum + stat.pacientes_atendidos, 0) / estadisticas.length).toFixed(0)
-            : "No disponible"
-
-        const tiempoEsperaPromedio =
-          estadisticas && estadisticas.length > 0
-            ? (estadisticas.reduce((sum, stat) => sum + stat.tiempo_espera_promedio, 0) / estadisticas.length).toFixed(
-                0,
-              )
-            : "No disponible"
-
-        const citasCanceladas = citas ? citas.filter((cita) => cita.estado === "cancelada").length : 0
-        const citasPendientes = citas ? citas.filter((cita) => cita.estado === "pendiente").length : 0
-        const citasCompletadas = citas ? citas.filter((cita) => cita.estado === "completada").length : 0
-
-        // Información de seguros
-        const segurosText = seguros
-          ? seguros.map((s) => `${s.nombre}: ${s.cobertura}`).join("\n")
-          : "No hay información de seguros disponible."
-
-        // Crear un contexto detallado para el modelo
-        const systemPrompt = `
-Eres la asistente virtual del Centro Médico Familiar en San Juan Sacatepéquez, Guatemala.
-
-INSTRUCCIONES IMPORTANTES:
-1. Sé EXTREMADAMENTE CONCISO. Limita tus respuestas a 1-3 oraciones cortas.
-2. Mantén un tono amable y profesional.
-3. Identifícate como la IA del Centro Médico Familiar.
-4. Evita explicaciones largas o detalles innecesarios.
-5. Proporciona información precisa y directa.
-6. Si no conoces la respuesta, sugiere consultar el sistema interno.
-7. Cuando menciones precios, usa quetzales (Q).
-8. Si te preguntan por un total o suma de precios mencionados anteriormente, CALCULA el total y muestra el desglose.
-9. Mantén el contexto de la conversación y recuerda información previa relevante.
-
-INFORMACIÓN GENERAL:
-- Dirección: 2 av. 5-08 zona 3 San Juan Sacatepéquez
-- Teléfono: 4644-9158
-- Horario: Lunes a Viernes 8:00-18:00, Sábados 8:00-13:00
-- Especialidades: medicina general, pediatría, cardiología, ginecología, nutrición, dermatología y psicología
-- Métodos de pago: efectivo, tarjetas, cheques, transferencias y seguros médicos
-
-IMPORTANTE: Estás interactuando con el Dr(a). ${medicoNombre}, quien es médico del centro médico.
-Recuerda: Brevedad y precisión son tu prioridad.
-`
-
-        try {
-          // Usar el endpoint de Groq
-          const text = await obtenerRespuestaGroq(userMessage, systemPrompt)
-
-          // Extraer precios mencionados en la respuesta
-          const extractedPrices = extractPrices(text)
-
-          // Actualizar el contexto con los precios mencionados
-          if (extractedPrices.length > 0) {
-            setConversationContext((prevContext) => ({
-              ...prevContext,
-              mentionedPrices: [...extractedPrices],
-            }))
-          }
-
-          setMessages((prev) => [...prev, { role: "assistant", content: text }])
-        } catch (groqError) {
-          console.error("Error al generar respuesta con Groq:", groqError)
-
-          // Usar el endpoint de fallback
-          const fallbackText = await obtenerRespuestaFallback(userMessage)
-
-          // Extraer precios mencionados en la respuesta
-          const extractedPrices = extractPrices(fallbackText)
-
-          // Actualizar el contexto con los precios mencionados
-          if (extractedPrices.length > 0) {
-            setConversationContext((prevContext) => ({
-              ...prevContext,
-              mentionedPrices: [...extractedPrices],
-            }))
-          }
-
-          setMessages((prev) => [...prev, { role: "assistant", content: fallbackText }])
+        if (!response.ok) {
+          throw new Error(`Error en la respuesta: ${response.status}`)
         }
-      } catch (dbError) {
-        console.error("Error al obtener datos de la base de datos:", dbError)
+
+        const data = await response.json()
+
+        // Agregar la respuesta del asistente al estado
+        const assistantMessage = {
+          role: "assistant",
+          content: data.text || "Lo siento, ocurrió un error al procesar tu mensaje.",
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+      } catch (error) {
+        console.error("Error al enviar mensaje:", error)
 
         // Usar el endpoint de fallback
-        const fallbackText = await obtenerRespuestaFallback(userMessage)
-        setMessages((prev) => [...prev, { role: "assistant", content: fallbackText }])
+        try {
+          const fallbackResponse = await fetch("/api/chatbot/fallback", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              query: userMessage,
+              conversationHistory: messages.slice(-5), // Enviar las últimas 5 mensajes para contexto
+            }),
+          })
+
+          if (!fallbackResponse.ok) {
+            throw new Error("Error en la respuesta de fallback")
+          }
+
+          const fallbackData = await fallbackResponse.json()
+          setMessages((prev) => [...prev, { role: "assistant", content: fallbackData.text }])
+        } catch (fallbackError) {
+          // Agregar un mensaje de error amigable
+          const errorMessage = {
+            role: "assistant",
+            content:
+              "Lo siento, estoy teniendo problemas para conectarme. Por favor, intenta de nuevo más tarde o utiliza las funciones del panel directamente.",
+          }
+          setMessages((prev) => [...prev, errorMessage])
+        }
       }
     } catch (error) {
       console.error("Error general en el chatbot:", error)
@@ -733,77 +863,49 @@ Recuerda: Brevedad y precisión son tu prioridad.
   }
 
   return (
-    <>
-      {/* Chat button */}
-      <Button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-4 rounded-full w-12 h-12 p-0 bg-green-600 hover:bg-green-700 shadow-lg"
-        aria-label="Abrir chat"
+    <div className="flex flex-col h-full">
+      {/* Contenedor de mensajes con altura fija */}
+      <div
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto p-3 space-y-3"
+        style={{ height: "300px", maxHeight: "300px" }}
       >
-        <MessageSquare className="h-6 w-6" />
-      </Button>
+        {messages.map((message, index) => (
+          <div
+            key={index}
+            className={`p-3 rounded-lg max-w-[85%] ${message.role === "user" ? "bg-blue-100 ml-auto" : "bg-green-50"}`}
+          >
+            {message.content}
+          </div>
+        ))}
+        {isLoading && (
+          <div className="bg-green-50 p-3 rounded-lg max-w-[85%] flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+            <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+            <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
 
-      {/* Chat widget */}
-      {isOpen && (
-        <Card className="fixed bottom-4 right-4 w-80 md:w-96 h-96 flex flex-col shadow-xl z-50">
-          <CardHeader className="py-3 px-4 flex flex-row items-center justify-between border-b bg-green-50">
-            <CardTitle className="text-sm font-medium text-green-700">
-              Asistente Médico {medicoNombre ? `(Dr. ${medicoNombre})` : ""}
-            </CardTitle>
-            <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="h-8 w-8">
-              <X className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((message, index) => (
-              <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-                    message.role === "user" ? "bg-sky-500 text-white" : "bg-green-100 text-gray-800"
-                  }`}
-                >
-                  {message.content}
-                </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="max-w-[80%] rounded-lg px-3 py-2 text-sm bg-green-100 text-gray-800">
-                  <span className="flex gap-1">
-                    <span className="animate-bounce">.</span>
-                    <span className="animate-bounce" style={{ animationDelay: "0.2s" }}>
-                      .
-                    </span>
-                    <span className="animate-bounce" style={{ animationDelay: "0.4s" }}>
-                      .
-                    </span>
-                  </span>
-                </div>
-              </div>
-            )}
-          </CardContent>
-          <CardFooter className="p-2 border-t">
-            <form onSubmit={handleSendMessage} className="flex w-full gap-2">
-              <Input
-                placeholder="Escribe tu mensaje..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                disabled={isLoading}
-                className="flex-1"
-              />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={isLoading || !input.trim()}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </form>
-          </CardFooter>
-        </Card>
-      )}
-    </>
+      {/* Formulario de entrada */}
+      <form onSubmit={handleSendMessage} className="p-2 border-t flex">
+        <Input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Escribe tu mensaje..."
+          className="flex-1 border rounded-l-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500"
+          disabled={isLoading}
+        />
+        <Button
+          type="submit"
+          className="bg-green-500 text-white px-4 py-2 rounded-r-md hover:bg-green-600 disabled:bg-green-300"
+          disabled={isLoading || !input.trim()}
+        >
+          <Send className="h-4 w-4" />
+        </Button>
+      </form>
+    </div>
   )
 }

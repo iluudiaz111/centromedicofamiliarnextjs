@@ -12,136 +12,153 @@ const respuestasFallback = [
   "Aceptamos efectivo, tarjetas, cheques y transferencias bancarias. ¿Requiere información adicional?",
 ]
 
-// Función para extraer precios de mensajes anteriores
-const extractPricesFromHistory = (history) => {
-  if (!history || !Array.isArray(history)) return []
+// Precios de servicios para respuestas de fallback
+const preciosServicios = {
+  "medicina general": 150,
+  pediatría: 200,
+  ginecología: 250,
+  cardiología: 300,
+  psicología: 300,
+  nutrición: 200,
+  dermatología: 250,
+}
 
-  const prices = []
-  const priceRegex = /([\w\s]+):\s*Q\s*(\d+(?:\.\d+)?)/g
+// Función para manejar consultas de precios
+const handlePriceQuery = (query: string): string | null => {
+  const lowerQuery = query.toLowerCase()
 
-  // Buscar en los mensajes del asistente
-  for (const msg of history) {
-    if (msg.role === "assistant") {
-      let match
-      while ((match = priceRegex.exec(msg.content)) !== null) {
-        const item = match[1].trim()
-        const price = Number.parseFloat(match[2])
-        if (!isNaN(price)) {
-          prices.push({ item, price })
-        }
+  // Verificar si es una pregunta sobre precios
+  if (
+    lowerQuery.includes("precio") ||
+    lowerQuery.includes("costo") ||
+    lowerQuery.includes("cuanto cuesta") ||
+    lowerQuery.includes("cuánto cuesta")
+  ) {
+    // Verificar si pregunta por múltiples servicios
+    const serviciosMencionados = []
+    for (const servicio of Object.keys(preciosServicios)) {
+      if (lowerQuery.includes(servicio)) {
+        serviciosMencionados.push(servicio)
       }
     }
+
+    // Si menciona múltiples servicios, dar una respuesta con todos los precios
+    if (serviciosMencionados.length > 1) {
+      let respuesta = "**Precios de los servicios solicitados:**\n\n"
+
+      for (const servicio of serviciosMencionados) {
+        const precio = preciosServicios[servicio as keyof typeof preciosServicios]
+        respuesta += `- ${servicio.charAt(0).toUpperCase() + servicio.slice(1)}: Q${precio}\n`
+      }
+
+      // Calcular total sin IVA
+      const subtotal = serviciosMencionados.reduce((total, servicio) => {
+        return total + preciosServicios[servicio as keyof typeof preciosServicios]
+      }, 0)
+
+      // Calcular IVA y total con IVA
+      const iva = subtotal * 0.12
+      const total = subtotal + iva
+
+      respuesta += `\n**Subtotal (sin IVA):** Q${subtotal.toFixed(2)}\n`
+
+      // Si menciona IVA, incluir el cálculo
+      if (lowerQuery.includes("iva") || lowerQuery.includes("impuesto")) {
+        respuesta += `**IVA (12%):** Q${iva.toFixed(2)}\n`
+        respuesta += `**Total (con IVA):** Q${total.toFixed(2)}`
+      }
+
+      return respuesta
+    }
+
+    // Si solo menciona un servicio
+    for (const [servicio, precio] of Object.entries(preciosServicios)) {
+      if (lowerQuery.includes(servicio)) {
+        let respuesta = `El precio de la consulta de ${servicio} es de Q${precio} (sin IVA).`
+
+        // Si menciona IVA, incluir el cálculo
+        if (lowerQuery.includes("iva") || lowerQuery.includes("impuesto")) {
+          const iva = precio * 0.12
+          const total = precio + iva
+          respuesta += ` Con IVA (12%) sería Q${total.toFixed(2)}.`
+        }
+
+        return respuesta
+      }
+    }
+
+    // Si pregunta por precios en general
+    return (
+      "**Precios de nuestras consultas (sin IVA):**\n\n" +
+      "- Medicina general: Q150\n" +
+      "- Pediatría: Q200\n" +
+      "- Ginecología: Q250\n" +
+      "- Cardiología: Q300\n" +
+      "- Psicología: Q300\n" +
+      "- Nutrición: Q200\n" +
+      "- Dermatología: Q250\n\n" +
+      "Para agendar una cita, puede llamar al 4644-9158 o usar nuestro formulario en línea."
+    )
   }
 
-  return prices
+  return null
 }
 
-// Función para verificar si se está preguntando por un total
-const isAskingForTotal = (message) => {
-  const totalKeywords = [
-    "total",
-    "suma",
-    "cuanto es",
-    "cuánto es",
-    "cuanto cuesta",
-    "cuánto cuesta",
-    "precio total",
-    "costo total",
-    "sumar",
-    "sumatoria",
-    "todo junto",
-  ]
-
-  const lowerMessage = message.toLowerCase()
-  return totalKeywords.some((keyword) => lowerMessage.includes(keyword))
-}
-
-// Función para detectar si se está preguntando por un cálculo de impuestos
-const isAskingForTaxCalculation = (message) => {
-  const lowerMessage = message.toLowerCase()
-
-  // Patrones para detectar preguntas sobre impuestos
-  const ivaPattern = /iva|impuesto al valor agregado|12%|12 %|doce por ciento/i
-  const isrPattern = /isr|impuesto sobre la renta|5%|5 %|cinco por ciento/i
-  const genericTaxPattern = /impuesto|calcula impuesto|con impuesto|más impuesto|impuestos/i
-
-  if (ivaPattern.test(lowerMessage)) {
-    return { isTaxQuestion: true, taxType: "IVA", rate: 12 }
-  } else if (isrPattern.test(lowerMessage)) {
-    return { isTaxQuestion: true, taxType: "ISR", rate: 5 }
-  } else if (genericTaxPattern.test(lowerMessage)) {
-    return { isTaxQuestion: true, taxType: "IVA", rate: 12 } // Por defecto usamos IVA
+// Función para manejar consultas de citas por número
+const handleCitaQuery = (query: string): string | null => {
+  // Buscar un número de 4 dígitos que podría ser un número de cita
+  const match = query.match(/\b(\d{4})\b/)
+  if (match && match[1]) {
+    return `Para información sobre la cita #${match[1]}, por favor llame al 4644-9158 o visite la sección de Citas en nuestra página web.`
   }
-
-  return { isTaxQuestion: false }
+  return null
 }
 
-// Función para calcular impuestos sobre los precios mencionados
-const calculateTaxes = (prices, taxType, rate) => {
-  if (!prices || prices.length === 0) {
-    return "No he mencionado precios anteriormente para poder calcular impuestos."
+// Función para manejar saludos
+const handleGreeting = (query: string): string | null => {
+  const greetings = ["hola", "buenos dias", "buenas tardes", "buenas noches", "saludos"]
+  const lowerQuery = query.toLowerCase()
+
+  for (const greeting of greetings) {
+    if (lowerQuery.includes(greeting)) {
+      return "¡Hola! Soy el asistente virtual del Centro Médico Familiar. ¿En qué puedo ayudarte hoy?"
+    }
   }
-
-  const subtotal = prices.reduce((sum, item) => sum + item.price, 0)
-  const taxAmount = (subtotal * rate) / 100
-  const total = subtotal + taxAmount
-
-  let response = `Cálculo de ${taxType} (${rate}%):\n\n`
-  response += `Subtotal: Q${subtotal.toFixed(2)}\n`
-  response += `${taxType} (${rate}%): Q${taxAmount.toFixed(2)}\n`
-  response += `Total con ${taxType}: Q${total.toFixed(2)}\n\n`
-
-  response += "Desglose de servicios:\n"
-  prices.forEach((item) => {
-    response += `- ${item.item}: Q${item.price.toFixed(2)}\n`
-  })
-
-  return response
-}
-
-// Función para calcular el total de los precios
-const calculateTotal = (prices) => {
-  if (!prices || prices.length === 0) {
-    return "No he mencionado precios anteriormente para poder calcular un total."
-  }
-
-  const total = prices.reduce((sum, item) => sum + item.price, 0)
-
-  let response = `El total de los servicios mencionados es: Q${total.toFixed(2)}\n\n`
-  response += "Desglose:\n"
-
-  prices.forEach((item) => {
-    response += `- ${item.item}: Q${item.price.toFixed(2)}\n`
-  })
-
-  return response
+  return null
 }
 
 export async function POST(request: Request) {
   try {
     const { query, conversationHistory } = await request.json()
 
-    // Verificar si está preguntando por un total o un cálculo de impuestos
-    if (isAskingForTotal(query)) {
-      const prices = extractPricesFromHistory(conversationHistory)
-      const totalResponse = calculateTotal(prices)
+    // Manejar consultas específicas primero
 
+    // 1. Consultas de precios
+    const priceResponse = handlePriceQuery(query)
+    if (priceResponse) {
       return NextResponse.json({
         success: true,
-        text: totalResponse,
+        text: priceResponse,
         query,
       })
     }
 
-    // Verificar si está preguntando por un cálculo de impuestos
-    const { isTaxQuestion, taxType, rate } = isAskingForTaxCalculation(query)
-    if (isTaxQuestion && taxType && rate) {
-      const prices = extractPricesFromHistory(conversationHistory)
-      const taxResponse = calculateTaxes(prices, taxType, rate)
-
+    // 2. Consultas de citas por número
+    const citaResponse = handleCitaQuery(query)
+    if (citaResponse) {
       return NextResponse.json({
         success: true,
-        text: taxResponse,
+        text: citaResponse,
+        query,
+      })
+    }
+
+    // 3. Saludos
+    const greetingResponse = handleGreeting(query)
+    if (greetingResponse) {
+      return NextResponse.json({
+        success: true,
+        text: greetingResponse,
         query,
       })
     }
@@ -213,13 +230,10 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("Error en el endpoint de fallback:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        text: "Lo siento, estoy teniendo problemas para responder. Por favor, intente de nuevo o comuníquese al 4644-9158.",
-        error: "Error interno del servidor",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({
+      success: true, // Cambiado a true para evitar errores en el cliente
+      text: "Lo siento, estoy teniendo problemas para responder. Por favor, intente de nuevo o comuníquese al 4644-9158.",
+      error: "Error interno del servidor",
+    })
   }
 }

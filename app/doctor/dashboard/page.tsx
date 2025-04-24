@@ -12,6 +12,7 @@ import { createClientSupabaseClient } from "@/lib/supabase"
 import { toast } from "@/components/ui/use-toast"
 import { DoctorChatbotWidget } from "@/components/doctor-chatbot-widget"
 import { RefreshCw } from "lucide-react"
+import { DoctorChatbotStatus } from "@/components/doctor-chatbot-status"
 
 type Cita = {
   id: number
@@ -33,6 +34,7 @@ export default function DoctorDashboardPage() {
   const [citas, setCitas] = useState<Cita[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [activeTab, setActiveTab] = useState("citas")
 
   useEffect(() => {
     // Verificar si el doctor está autenticado
@@ -255,54 +257,46 @@ export default function DoctorDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Citas de Hoy</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-sky-600">{citasHoy.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Citas Pendientes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-sky-600">{citas.filter((c) => c.estado === "pendiente").length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Citas Completadas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-sky-600">{citas.filter((c) => c.estado === "completada").length}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <DoctorChatbotStatus />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Gestión de Citas</CardTitle>
-          <CardDescription>Administre las citas de sus pacientes</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="hoy">
-            <TabsList className="mb-4">
-              <TabsTrigger value="hoy">Hoy ({citasHoy.length})</TabsTrigger>
-              <TabsTrigger value="futuras">Próximas ({citasFuturas.length})</TabsTrigger>
-              <TabsTrigger value="pasadas">Pasadas ({citasPasadas.length})</TabsTrigger>
-              <TabsTrigger value="todas">Todas ({citas.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="hoy">{renderTablaCitas(citasHoy)}</TabsContent>
-            <TabsContent value="futuras">{renderTablaCitas(citasFuturas)}</TabsContent>
-            <TabsContent value="pasadas">{renderTablaCitas(citasPasadas)}</TabsContent>
-            <TabsContent value="todas">{renderTablaCitas(citas)}</TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-      <DoctorChatbotWidget />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="md:col-span-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Gestión de Citas</CardTitle>
+              <CardDescription>Administre las citas de sus pacientes</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="hoy">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="hoy">Hoy ({citasHoy.length})</TabsTrigger>
+                  <TabsTrigger value="futuras">Próximas ({citasFuturas.length})</TabsTrigger>
+                  <TabsTrigger value="pasadas">Pasadas ({citasPasadas.length})</TabsTrigger>
+                  <TabsTrigger value="todas">Todas ({citas.length})</TabsTrigger>
+                </TabsList>
+                <TabsContent value="hoy">{renderTablaCitas(citasHoy)}</TabsContent>
+                <TabsContent value="futuras">{renderTablaCitas(citasFuturas)}</TabsContent>
+                <TabsContent value="pasadas">{renderTablaCitas(citasPasadas)}</TabsContent>
+                <TabsContent value="todas">{renderTablaCitas(citas)}</TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="md:col-span-1">
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle>Asistente Virtual</CardTitle>
+              <CardDescription>Consulte información y gestione sus citas</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="h-[400px] flex flex-col">
+                <DoctorChatbotWidget />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }
