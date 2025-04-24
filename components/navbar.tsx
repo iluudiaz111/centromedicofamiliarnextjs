@@ -1,5 +1,6 @@
 import Link from "next/link"
 import Image from "next/image"
+import { MobileMenu } from "@/components/mobile-menu"
 
 export function Navbar() {
   return (
@@ -38,15 +39,8 @@ export function Navbar() {
             </Link>
           </div>
 
-          {/* Menú móvil - simplificado para este ejemplo */}
-          <div className="md:hidden">
-            <Link href="/citas" className="text-gray-700 hover:text-primary mr-4">
-              Citas
-            </Link>
-            <Link href="/doctor/login" className="text-gray-700 hover:text-primary">
-              Médicos
-            </Link>
-          </div>
+          {/* Menú móvil */}
+          <MobileMenu />
         </div>
       </div>
     </nav>

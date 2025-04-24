@@ -163,65 +163,67 @@ export default function DoctorDashboardPage() {
     }
 
     return (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Paciente</TableHead>
-            <TableHead>Fecha</TableHead>
-            <TableHead>Hora</TableHead>
-            <TableHead>Motivo</TableHead>
-            <TableHead>Estado</TableHead>
-            <TableHead>Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {citasAMostrar.map((cita) => (
-            <TableRow key={cita.id}>
-              <TableCell className="font-medium">{cita.paciente.nombre}</TableCell>
-              <TableCell>{format(new Date(cita.fecha), "dd/MM/yyyy")}</TableCell>
-              <TableCell>{cita.hora}</TableCell>
-              <TableCell className="max-w-[200px] truncate">{cita.motivo}</TableCell>
-              <TableCell>
-                <Badge
-                  className={
-                    cita.estado === "completada"
-                      ? "bg-green-500"
-                      : cita.estado === "cancelada"
-                        ? "bg-red-500"
-                        : "bg-yellow-500"
-                  }
-                >
-                  {cita.estado}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <div className="flex gap-2">
-                  {cita.estado === "pendiente" && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-green-600 border-green-600 hover:bg-green-50"
-                        onClick={() => handleCambiarEstado(cita.id, "completada")}
-                      >
-                        Completar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-red-600 border-red-600 hover:bg-red-50"
-                        onClick={() => handleCambiarEstado(cita.id, "cancelada")}
-                      >
-                        Cancelar
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </TableCell>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Paciente</TableHead>
+              <TableHead>Fecha</TableHead>
+              <TableHead>Hora</TableHead>
+              <TableHead className="hidden sm:table-cell">Motivo</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Acciones</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {citasAMostrar.map((cita) => (
+              <TableRow key={cita.id}>
+                <TableCell className="font-medium">{cita.paciente.nombre}</TableCell>
+                <TableCell>{format(new Date(cita.fecha), "dd/MM/yyyy")}</TableCell>
+                <TableCell>{cita.hora}</TableCell>
+                <TableCell className="hidden sm:table-cell max-w-[200px] truncate">{cita.motivo}</TableCell>
+                <TableCell>
+                  <Badge
+                    className={
+                      cita.estado === "completada"
+                        ? "bg-green-500"
+                        : cita.estado === "cancelada"
+                          ? "bg-red-500"
+                          : "bg-yellow-500"
+                    }
+                  >
+                    {cita.estado}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {cita.estado === "pendiente" && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-green-600 border-green-600 hover:bg-green-50"
+                          onClick={() => handleCambiarEstado(cita.id, "completada")}
+                        >
+                          Completar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 border-red-600 hover:bg-red-50"
+                          onClick={() => handleCambiarEstado(cita.id, "cancelada")}
+                        >
+                          Cancelar
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     )
   }
 
@@ -236,13 +238,13 @@ export default function DoctorDashboardPage() {
   }
 
   return (
-    <div className="container py-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="container py-8 px-4 sm:px-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-sky-700">Dashboard Médico</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-sky-700">Dashboard Médico</h1>
           <p className="text-gray-600">Bienvenido/a, {doctorNombre}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" className="flex items-center gap-2" onClick={handleRefresh} disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
             {isRefreshing ? "Actualizando..." : "Actualizar citas"}
@@ -259,8 +261,8 @@ export default function DoctorDashboardPage() {
 
       <DoctorChatbotStatus />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="md:col-span-3">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+        <div className="lg:col-span-3">
           <Card>
             <CardHeader>
               <CardTitle>Gestión de Citas</CardTitle>
@@ -268,7 +270,7 @@ export default function DoctorDashboardPage() {
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="hoy">
-                <TabsList className="mb-4">
+                <TabsList className="mb-4 flex flex-wrap">
                   <TabsTrigger value="hoy">Hoy ({citasHoy.length})</TabsTrigger>
                   <TabsTrigger value="futuras">Próximas ({citasFuturas.length})</TabsTrigger>
                   <TabsTrigger value="pasadas">Pasadas ({citasPasadas.length})</TabsTrigger>
@@ -283,7 +285,7 @@ export default function DoctorDashboardPage() {
           </Card>
         </div>
 
-        <div className="md:col-span-1">
+        <div className="lg:col-span-1">
           <Card className="h-full">
             <CardHeader>
               <CardTitle>Asistente Virtual</CardTitle>
