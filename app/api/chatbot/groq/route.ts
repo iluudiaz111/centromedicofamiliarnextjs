@@ -1,6 +1,122 @@
 import { NextResponse } from "next/server"
 import { generateText } from "ai"
 import { getGroqModel, isGroqAvailable } from "@/lib/groq-config"
+import { createServerSupabaseClient } from "@/lib/supabase"
+
+// Función para obtener información contextual de la base de datos
+async function obtenerContextoBaseDatos(mensaje: string): Promise<string> {
+  try {
+    const supabase = createServerSupabaseClient()
+    let contextoAdicional = ""
+
+    // Normalizar mensaje
+    const mensajeLimpio = mensaje
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+
+    // Buscar palabras clave
+    const palabrasClave = mensajeLimpio
+      .split(/\s+/)
+      .filter((palabra) => palabra.length >= 3)
+      .map((palabra) => palabra.replace(/[^\w]/g, ""))
+
+    if (palabrasClave.length === 0) {
+      return ""
+    }
+
+    // Buscar en servicios
+    if (
+      mensajeLimpio.includes("servicio") ||
+      mensajeLimpio.includes("precio") ||
+      mensajeLimpio.includes("costo") ||
+      mensajeLimpio.includes("cuanto cuesta") ||
+      mensajeLimpio.includes("cuánto cuesta")
+    ) {
+      const condicionesServicios = palabrasClave
+        .map((palabra) => {
+          return `(nombre.ilike.%${palabra}% or descripcion.ilike.%${palabra}%)`
+        })
+        .join(" or ")
+
+      const { data: servicios, error: serviciosError } = await supabase
+        .from("servicios")
+        .select("nombre, descripcion, precio")
+        .or(condicionesServicios)
+        .limit(5)
+
+      if (!serviciosError && servicios && servicios.length > 0) {
+        contextoAdicional += "INFORMACIÓN DE SERVICIOS:\n"
+        servicios.forEach((servicio) => {
+          contextoAdicional += `- ${servicio.nombre}: Q${servicio.precio} - ${servicio.descripcion}\n`
+        })
+        contextoAdicional += "\n"
+      }
+    }
+
+    // Buscar en doctores
+    if (
+      mensajeLimpio.includes("doctor") ||
+      mensajeLimpio.includes("medico") ||
+      mensajeLimpio.includes("médico") ||
+      mensajeLimpio.includes("especialista") ||
+      mensajeLimpio.includes("especialidad")
+    ) {
+      const condicionesDoctores = palabrasClave
+        .map((palabra) => {
+          return `(nombre.ilike.%${palabra}% or especialidad.ilike.%${palabra}% or biografia.ilike.%${palabra}%)`
+        })
+        .join(" or ")
+
+      const { data: doctores, error: doctoresError } = await supabase
+        .from("doctores")
+        .select("nombre, especialidad, biografia, horario")
+        .or(condicionesDoctores)
+        .limit(5)
+
+      if (!doctoresError && doctores && doctores.length > 0) {
+        contextoAdicional += "INFORMACIÓN DE ESPECIALISTAS:\n"
+        doctores.forEach((doctor) => {
+          contextoAdicional += `- Dr(a). ${doctor.nombre} - ${doctor.especialidad}`
+          if (doctor.horario) {
+            contextoAdicional += ` - Horario: ${doctor.horario}`
+          }
+          contextoAdicional += "\n"
+        })
+        contextoAdicional += "\n"
+      }
+    }
+
+    // Buscar en información médica
+    const condicionesInfoMedica = palabrasClave
+      .map((palabra) => {
+        return `(titulo.ilike.%${palabra}% or contenido.ilike.%${palabra}%)`
+      })
+      .join(" or ")
+
+    const { data: infoMedica, error: infoMedicaError } = await supabase
+      .from("info_medica")
+      .select("titulo, contenido")
+      .or(condicionesInfoMedica)
+      .limit(2)
+
+    if (!infoMedicaError && infoMedica && infoMedica.length > 0) {
+      contextoAdicional += "INFORMACIÓN MÉDICA RELEVANTE:\n"
+      infoMedica.forEach((info) => {
+        // Limitar el contenido a 200 caracteres para no sobrecargar el contexto
+        const contenidoResumido =
+          info.contenido.length > 200 ? info.contenido.substring(0, 200) + "..." : info.contenido
+        contextoAdicional += `- ${info.titulo}: ${contenidoResumido}\n`
+      })
+    }
+
+    return contextoAdicional
+  } catch (error) {
+    console.error("Error al obtener contexto de la base de datos:", error)
+    return ""
+  }
+}
 
 // Respuesta de fallback simple para cuando Groq no está disponible
 const getFallbackResponse = (mensaje: string): string => {
@@ -79,6 +195,9 @@ export async function POST(request: Request) {
     if (!mensaje) {
       return NextResponse.json({ success: false, error: "Se requiere un mensaje" }, { status: 400 })
     }
+
+    // Obtener contexto adicional de la base de datos
+    const contextoBaseDatos = await obtenerContextoBaseDatos(mensaje)
 
     // Verificar si Groq está disponible con un timeout corto
     let groqAvailable = false
@@ -159,6 +278,9 @@ export async function POST(request: Request) {
     Cuando te pregunten por precios, SIEMPRE especifica si incluyen o no IVA.
     Si te preguntan por varios precios, preséntalos en formato de lista con guiones.
     Si te preguntan por un total con IVA, calcula el IVA (12%) y muestra el desglose completo.
+    
+    CONTEXTO ADICIONAL DE LA BASE DE DATOS:
+    ${contextoBaseDatos}
     
     Recuerda: Brevedad y precisión son tu prioridad.
     `
