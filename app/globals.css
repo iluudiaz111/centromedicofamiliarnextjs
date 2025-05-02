@@ -70,7 +70,42 @@
   * {
     @apply border-border;
   }
+
+  html,
+  body {
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+  }
+
   body {
     @apply bg-background text-foreground;
+    /* Fondo suave */
+    background: linear-gradient(to bottom, #e6f2ff, #ffffff) !important;
+    background-attachment: fixed !important;
+    background-size: cover !important;
+    position: relative;
+  }
+
+  /* Asegurar que el contenido tenga suficiente contraste con el fondo */
+  main {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Ajustar colores de tarjetas para mejor contraste con el fondo */
+  .card,
+  .bg-card {
+    background-color: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+  }
+
+  /* Estilo para las secciones con fondo azul */
+  .bg-sky-500 {
+    background-color: #0ea5e9 !important;
+  }
+
+  .bg-sky-600 {
+    background-color: #0284c7 !important;
   }
 }

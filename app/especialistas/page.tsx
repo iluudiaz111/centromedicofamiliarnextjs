@@ -8,6 +8,46 @@ export const metadata = {
   description: "Conoce a nuestros especialistas médicos del Centro Médico Familiar",
 }
 
+// Imágenes de doctores destacados para la sección superior
+const doctoresDestacados = [
+  {
+    id: 1,
+    nombre: "Dra. María Rodríguez",
+    especialidad: "Medicina General",
+    imagen: "/images/doctores/doctora-clipboard.jpeg",
+  },
+  {
+    id: 2,
+    nombre: "Dr. Carlos Mendoza",
+    especialidad: "Cardiología",
+    imagen: "/images/doctores/doctor-sonriente.jpeg",
+  },
+  {
+    id: 3,
+    nombre: "Dra. Laura Sánchez",
+    especialidad: "Pediatría",
+    imagen: "/images/doctores/doctora-estetoscopio.jpeg",
+  },
+  {
+    id: 4,
+    nombre: "Dr. Roberto Jiménez",
+    especialidad: "Medicina Interna",
+    imagen: "/images/doctores/doctor-gafas.png",
+  },
+  {
+    id: 5,
+    nombre: "Dr. Miguel Hernández",
+    especialidad: "Neurología",
+    imagen: "/images/doctores/doctor-corbata-azul.png",
+  },
+  {
+    id: 6,
+    nombre: "Dr. Antonio Pérez",
+    especialidad: "Traumatología",
+    imagen: "/images/doctores/doctor-senalando.png",
+  },
+]
+
 export default async function EspecialistasPage() {
   const supabase = createServerSupabaseClient()
   const { data: doctores } = await supabase.from("doctores").select("*").order("especialidad", { ascending: true })
@@ -32,6 +72,33 @@ export default async function EspecialistasPage() {
         En Centro Médico Familiar contamos con un equipo de profesionales altamente calificados, comprometidos con
         brindarle la mejor atención médica. Conozca a nuestros especialistas.
       </p>
+
+      {/* Nueva sección de doctores destacados con imágenes */}
+      <div className="bg-sky-500 text-white p-8 rounded-lg mb-12">
+        <h2 className="text-2xl font-bold mb-6 text-center">Especialistas Destacados</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {doctoresDestacados.map((doctor) => (
+            <div
+              key={doctor.id}
+              className="bg-white rounded-lg overflow-hidden shadow-lg transform transition-transform hover:scale-105"
+            >
+              <div className="aspect-[3/4] relative">
+                <Image
+                  src={doctor.imagen || "/placeholder.svg"}
+                  alt={doctor.nombre}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                />
+              </div>
+              <div className="p-4 bg-white text-sky-800">
+                <h3 className="font-bold text-lg">{doctor.nombre}</h3>
+                <p className="text-sky-600">{doctor.especialidad}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="space-y-12">
         {especialidades.map((especialidad) => (
