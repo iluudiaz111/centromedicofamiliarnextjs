@@ -1,143 +1,65 @@
 import { NextResponse } from "next/server"
 import { generateText } from "ai"
-import { getGroqDoctorModel, isGroqDoctorAvailable } from "@/lib/groq-doctor-config"
+import { getGroqDoctorModel } from "@/lib/groq-doctor-config"
 
-// Respuesta de fallback simple para cuando Groq no está disponible
-const getFallbackResponse = (mensaje: string): string => {
-  // Respuestas básicas para mantener la funcionalidad mínima
-  if (mensaje.toLowerCase().includes("hola") || mensaje.toLowerCase().includes("saludos")) {
-    return "Hola, soy el asistente médico del Centro Médico Familiar. ¿En qué puedo ayudarle hoy, doctor?"
-  }
-
-  if (mensaje.toLowerCase().includes("citas")) {
-    return "Para consultar sus citas, puede decir 'muestra mis citas de hoy' o 'cuáles son mis próximas citas'."
-  }
-
-  if (mensaje.toLowerCase().includes("paciente") || mensaje.toLowerCase().includes("pacientes")) {
-    return "Puede consultar información de pacientes a través del sistema de gestión. ¿Necesita ayuda con algo más?"
-  }
-
-  // Respuesta genérica
-  return "Lo siento, estamos experimentando problemas técnicos con el asistente. Por favor, utilice las funciones del panel para consultar información específica."
-}
+export const maxDuration = 30 // Aumentar el tiempo máximo de ejecución a 30 segundos
 
 export async function POST(request: Request) {
   try {
-    const { mensaje, contexto, conversationHistory, medicoNombre, medicoId } = await request.json()
+    const { mensaje, medicoNombre, medicoId, conversationHistory } = await request.json()
 
+    // Verificar que tenemos un mensaje
     if (!mensaje) {
-      return NextResponse.json({ success: false, error: "Se requiere un mensaje" }, { status: 400 })
+      return NextResponse.json({ success: false, error: "No se proporcionó un mensaje" }, { status: 400 })
     }
 
-    // Verificar si Groq está disponible con un timeout corto
-    let groqAvailable = false
-    try {
-      const availabilityPromise = isGroqDoctorAvailable()
-      const timeoutPromise = new Promise<boolean>((resolve) => {
-        setTimeout(() => resolve(false), 2000) // 2 segundos máximo para verificar
-      })
-
-      groqAvailable = await Promise.race([availabilityPromise, timeoutPromise])
-    } catch (error) {
-      console.error("Error al verificar disponibilidad de Groq para doctores:", error)
-      groqAvailable = false
-    }
-
-    if (!groqAvailable) {
-      console.log("Groq no está disponible para doctores, usando respuesta de fallback")
-      return NextResponse.json({
-        success: true,
-        text: getFallbackResponse(mensaje),
-        source: "fallback",
-      })
-    }
-
+    // Obtener el modelo de Groq para doctores
     const model = getGroqDoctorModel()
     if (!model) {
-      console.log("No se pudo configurar el modelo de Groq para doctores, usando respuesta de fallback")
-      return NextResponse.json({
-        success: true,
-        text: getFallbackResponse(mensaje),
-        source: "fallback",
-      })
+      return NextResponse.json(
+        { success: false, error: "No se pudo inicializar el modelo de IA para doctores" },
+        { status: 500 },
+      )
     }
 
-    // Preparar el historial de conversación para el contexto
-    let conversationContext = ""
-    if (conversationHistory && Array.isArray(conversationHistory) && conversationHistory.length > 0) {
-      conversationContext = conversationHistory
-        .map((msg) => `${msg.role === "user" ? "Doctor" : "Asistente"}: ${msg.content}`)
+    // Construir el contexto de la conversación
+    let contextoPrevio = ""
+    if (conversationHistory && Array.isArray(conversationHistory)) {
+      contextoPrevio = conversationHistory
+        .map(
+          (msg: { role: string; content: string }) =>
+            `${msg.role === "user" ? "Usuario" : "Asistente"}: ${msg.content}`,
+        )
         .join("\n\n")
     }
 
-    // Sistema de prompt mejorado para respuestas concisas y manejo de contexto
-    const sistemaPrompt = `
-    ${
-      contexto ||
-      `
-    Eres el asistente médico virtual del Centro Médico Familiar, específicamente para el Dr. ${
-      medicoNombre || "médico"
-    } (ID: ${medicoId || "desconocido"}).
-    
-    INSTRUCCIONES IMPORTANTES:
-    1. Sé EXTREMADAMENTE CONCISO. Limita tus respuestas a 1-3 oraciones cortas.
-    2. Mantén un tono profesional y médico.
-    3. Identifícate como el asistente médico del Centro Médico Familiar.
-    4. Evita explicaciones largas o detalles innecesarios.
-    5. Proporciona información precisa y directa.
-    6. Si te preguntan por citas específicas, sugiere usar comandos como "muestra mis citas de hoy" o "cuáles son mis próximas citas".
-    7. Si te preguntan por pacientes específicos, sugiere consultar el expediente en el sistema.
-    8. Recuerda que estás en el panel del doctor, no en el chat general para pacientes.
-    
-    INFORMACIÓN GENERAL:
-    - El doctor puede consultar sus citas diciendo "muestra mis citas de hoy" o "cuáles son mis próximas citas"
-    - El sistema permite filtrar citas por estado: pendientes, completadas, canceladas
-    - El doctor puede ver información de pacientes a través del sistema de gestión
-    
-    Recuerda: Brevedad y precisión son tu prioridad.
-    `
-    }
+    // Construir el prompt para el modelo
+    const prompt = `
+Eres un asistente virtual especializado para médicos del Centro Médico Familiar. 
+${medicoNombre ? `Estás hablando con el/la Dr(a). ${medicoNombre}.` : ""}
 
-    HISTORIAL DE CONVERSACIÓN RECIENTE:
-    ${conversationContext}
-    `
+CONTEXTO PREVIO DE LA CONVERSACIÓN:
+${contextoPrevio}
 
-    // Generar respuesta con Groq con manejo de timeout
-    try {
-      const generatePromise = generateText({
-        model,
-        prompt: mensaje,
-        system: sistemaPrompt,
-        temperature: 0.7,
-        maxTokens: 200, // Reducir el número máximo de tokens para forzar respuestas más cortas
-      })
+CONSULTA ACTUAL:
+${mensaje}
 
-      // Establecer un timeout para la generación de texto
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Timeout al generar respuesta con Groq")), 10000) // 10 segundos
-      })
+Responde de manera profesional, clara y concisa. Proporciona información médica precisa cuando sea posible, pero recuerda que no puedes diagnosticar ni recetar medicamentos. Sugiere al médico que consulte fuentes oficiales o literatura médica actualizada para información más detallada.
+`
 
-      const { text } = (await Promise.race([generatePromise, timeoutPromise])) as { text: string }
-
-      return NextResponse.json({
-        success: true,
-        text,
-        source: "groq-doctor",
-      })
-    } catch (error) {
-      console.error("Error al generar texto con Groq para doctores:", error)
-      return NextResponse.json({
-        success: true,
-        text: getFallbackResponse(mensaje),
-        source: "fallback",
-      })
-    }
-  } catch (error) {
-    console.error("Error en el endpoint de Groq para doctores:", error)
-    return NextResponse.json({
-      success: true,
-      text: "Lo siento, estamos experimentando problemas técnicos. Por favor, utilice las funciones del panel para consultar información específica.",
-      source: "error",
+    // Generar respuesta con el modelo
+    const { text } = await generateText({
+      model,
+      prompt,
+      maxTokens: 1000,
     })
+
+    return NextResponse.json({ success: true, text })
+  } catch (error) {
+    console.error("Error en el endpoint de groq-doctor:", error)
+    return NextResponse.json(
+      { success: false, error: "Error al procesar la solicitud con el modelo de IA" },
+      { status: 500 },
+    )
   }
 }

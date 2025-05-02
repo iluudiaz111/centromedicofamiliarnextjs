@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { toast } from "@/components/ui/use-toast"
 import { createClientSupabaseClient } from "@/lib/supabase"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 const formSchema = z.object({
   email: z.string().email({
@@ -167,19 +168,23 @@ export default function DoctorLoginPage() {
             {showDoctorList && doctorList.length > 0 && (
               <div className="w-full border rounded-md p-2">
                 <p className="text-sm font-medium mb-2">Seleccione un doctor para iniciar sesión:</p>
-                <div className="space-y-1">
-                  {doctorList.map((doctor) => (
-                    <Button
-                      key={doctor.id}
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-left"
-                      onClick={() => handleSelectDoctor(doctor.email)}
-                    >
-                      {doctor.nombre} - {doctor.email}
-                    </Button>
-                  ))}
-                </div>
+                <ScrollArea className="h-[200px] w-full pr-4">
+                  <div className="space-y-1">
+                    {doctorList.map((doctor) => (
+                      <Button
+                        key={doctor.id}
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start text-left"
+                        onClick={() => handleSelectDoctor(doctor.email)}
+                      >
+                        <span className="truncate">
+                          {doctor.nombre} - {doctor.email}
+                        </span>
+                      </Button>
+                    ))}
+                  </div>
+                </ScrollArea>
               </div>
             )}
           </CardFooter>

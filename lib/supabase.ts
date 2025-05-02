@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
+export { createClient } from "@supabase/supabase-js"
 
 // Crear cliente para el lado del servidor
 export const createServerSupabaseClient = () => {

@@ -65,10 +65,11 @@ export function DoctorChatbotWidget() {
     }
   }, [])
 
-  // Scroll to bottom whenever messages change
+  // Scroll to bottom whenever messages change, pero sin afectar el scroll de la página
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+    if (messagesEndRef.current && chatContainerRef.current) {
+      // Solo hacemos scroll dentro del contenedor del chat, no en toda la página
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
     }
   }, [messages])
 
@@ -776,6 +777,8 @@ Para más detalles, puede revisar el expediente completo del paciente en el sist
                 role: "assistant",
                 content: `No encontré citas programadas para el ${fecha}${hora ? ` a las ${hora}` : ""}${
                   tipo ? ` relacionadas con ${tipo}` : ""
+                }. ¿Puedo ayudarte con algo más?  : ""}${
+                  tipo ? ` relacionadas con ${tipo}` : ""
                 }. ¿Puedo ayudarte con algo más?`,
               },
             ])
@@ -790,16 +793,16 @@ Para más detalles, puede revisar el expediente completo del paciente en el sist
 
       try {
         // Procesar con el chatbot específico para doctores
-        const response = await fetch("/api/chatbot/groq-doctor", {
+        const response = await fetch("/api/chatbot/fallback", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            mensaje: userMessage,
+            query: userMessage,
+            conversationHistory: messages.slice(-6), // Enviar solo las últimas 6 mensajes para contexto
             medicoNombre,
             medicoId,
-            conversationHistory: messages.slice(-6), // Enviar solo las últimas 6 mensajes para contexto
           }),
         })
 

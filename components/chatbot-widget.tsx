@@ -29,6 +29,13 @@ export function ChatbotWidget() {
   // Estado para almacenar los precios mencionados en la conversación
   const [preciosMencionados, setPreciosMencionados] = useState<PrecioItem[]>([])
 
+  // Estado para almacenar información del usuario actual
+  const [usuarioActual, setUsuarioActual] = useState<{
+    nombre?: string
+    numeroCita?: string
+    doctorNombre?: string
+  }>({})
+
   useEffect(() => {
     // Mensaje de bienvenida inicial
     if (messages.length === 0) {
@@ -197,6 +204,152 @@ export function ChatbotWidget() {
     return response
   }
 
+  // Función para detectar si el mensaje contiene información de identificación del usuario
+  const extractUserInfo = (message: string): { nombre?: string; doctorNombre?: string } => {
+    const lowerMessage = message.toLowerCase()
+    const info: { nombre?: string; doctorNombre?: string } = {}
+
+    // Patrones para detectar nombres de usuario
+    const nombrePatterns = [
+      /me llamo\s+([a-zñáéíóúü\s]+)/i,
+      /soy\s+([a-zñáéíóúü\s]+)/i,
+      /mi nombre es\s+([a-zñáéíóúü\s]+)/i,
+    ]
+
+    // Patrones para detectar nombres de doctores
+    const doctorPatterns = [
+      /(?:doctor|dr\.?|doctora|dra\.?)\s+([a-zñáéíóúü\s]+)/i,
+      /con\s+(?:el|la)?\s*(?:doctor|dr\.?|doctora|dra\.?)\s+([a-zñáéíóúü\s]+)/i,
+    ]
+
+    // Extraer nombre del usuario
+    for (const pattern of nombrePatterns) {
+      const match = lowerMessage.match(pattern)
+      if (match && match[1]) {
+        info.nombre = match[1].trim()
+        break
+      }
+    }
+
+    // Extraer nombre del doctor
+    for (const pattern of doctorPatterns) {
+      const match = lowerMessage.match(pattern)
+      if (match && match[1]) {
+        info.doctorNombre = match[1].trim()
+        break
+      }
+    }
+
+    return info
+  }
+
+  // Modificar la función isPreguntaCitaPorNumero para incluir la detección de "no recuerdo mi número de cita"
+  const isPreguntaCitaPorNumero = (
+    mensaje: string,
+  ): { esPregunta: boolean; numeroCita?: string; olvidoCita?: boolean } => {
+    // Convertir a minúsculas y eliminar acentos para facilitar la comparación
+    const mensajeLimpio = mensaje
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+
+    // Patrones para detectar cuando el usuario olvidó su número de cita
+    const patronesOlvido = [
+      "no recuerdo mi numero de cita",
+      "no recuerdo mi cita",
+      "olvide mi numero de cita",
+      "olvidé mi número de cita",
+      "no se mi numero de cita",
+      "no sé mi número de cita",
+      "perdi mi numero de cita",
+      "perdí mi número de cita",
+      "cual es mi numero de cita",
+      "cuál es mi número de cita",
+      "necesito saber mi cita",
+      "no tengo mi numero de cita",
+    ]
+
+    // Verificar si el mensaje indica que olvidó su número de cita
+    if (patronesOlvido.some((patron) => mensajeLimpio.includes(patron))) {
+      return { esPregunta: true, olvidoCita: true }
+    }
+
+    // Patrones para detectar preguntas sobre citas por número
+    const patrones = [
+      "cita numero",
+      "cita #",
+      "numero de cita",
+      "mi cita",
+      "informacion de la cita",
+      "informacion de cita",
+      "informacion cita",
+      "detalles de cita",
+      "consultar cita",
+      "buscar cita",
+      "estado de cita",
+      "cita con numero",
+      "cita con el numero",
+      "necesito informacion",
+      "quiero saber",
+      "datos de la cita",
+      "datos de mi cita",
+      "hora de mi cita",
+      "cuando es mi cita",
+      "a que hora es mi cita",
+    ]
+
+    // Verificar si algún patrón coincide
+    const esPregunta = patrones.some((patron) => mensajeLimpio.includes(patron))
+
+    // Si no coincide con ningún patrón pero contiene un número de 4 dígitos, también considerarlo como pregunta
+    const contieneCuatroDigitos = /\b\d{4}\b/.test(mensajeLimpio)
+
+    if (!esPregunta && !contieneCuatroDigitos) {
+      return { esPregunta: false }
+    }
+
+    // Buscar un patrón de 4 dígitos que podría ser el número de cita
+    const patronNumero = /\b(\d{4})\b/
+    const coincidencia = mensajeLimpio.match(patronNumero)
+
+    if (coincidencia && coincidencia[1]) {
+      return {
+        esPregunta: true,
+        numeroCita: coincidencia[1],
+      }
+    }
+
+    return { esPregunta: true }
+  }
+
+  // Función para consultar información de una cita por número
+  const consultarCitaPorNumero = async (numeroCita: string, nombrePaciente?: string, doctorNombre?: string) => {
+    try {
+      const response = await fetch("/api/chatbot/buscar-cita-numero", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          numeroCita,
+          nombrePaciente,
+          doctorNombre,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || `Error en la respuesta: ${response.status}`)
+      }
+
+      return data
+    } catch (error) {
+      console.error("Error al consultar cita por número:", error)
+      throw error
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
@@ -208,6 +361,15 @@ export function ChatbotWidget() {
 
     // Agregar mensaje del usuario
     setMessages((prev) => [...prev, { role: "user", content: userMessage }])
+
+    // Extraer información del usuario si está presente en el mensaje
+    const userInfo = extractUserInfo(userMessage)
+    if (userInfo.nombre) {
+      setUsuarioActual((prev) => ({ ...prev, nombre: userInfo.nombre }))
+    }
+    if (userInfo.doctorNombre) {
+      setUsuarioActual((prev) => ({ ...prev, doctorNombre: userInfo.doctorNombre }))
+    }
 
     // Verificar si está preguntando por un total o impuestos
     const askingForTotal = isAskingForTotal(userMessage)
@@ -229,6 +391,85 @@ export function ChatbotWidget() {
       return
     }
 
+    // Verificar si está preguntando por una cita específica
+    const citaQuery = isPreguntaCitaPorNumero(userMessage)
+
+    // Si está preguntando por una cita y tenemos un número de cita (ya sea del mensaje actual o de mensajes anteriores)
+    if (citaQuery.esPregunta) {
+      // Actualizar el número de cita si se encontró uno nuevo
+      if (citaQuery.numeroCita) {
+        setUsuarioActual((prev) => ({ ...prev, numeroCita: citaQuery.numeroCita }))
+      }
+
+      // Si el usuario olvidó su número de cita, proporcionar ayuda específica
+      if (citaQuery.olvidoCita) {
+        let respuesta = "Entiendo que no recuerdas tu número de cita. "
+
+        if (usuarioActual.nombre) {
+          respuesta += `Puedo ayudarte a buscar tus citas, ${usuarioActual.nombre}. `
+          respuesta += "Por favor, proporciona alguna de esta información adicional:\n\n"
+        } else {
+          respuesta += "Para ayudarte a encontrar tu cita, necesito alguna de esta información:\n\n"
+        }
+
+        respuesta += "- Tu nombre completo (si aún no me lo has dicho)\n"
+        respuesta += "- Fecha aproximada de tu cita\n"
+        respuesta += "- Nombre del doctor con quien tienes la cita\n"
+        respuesta += "- Especialidad médica de tu consulta\n\n"
+
+        respuesta += "También puedes llamar directamente al Centro Médico al 4644-9158 para obtener esta información."
+
+        setMessages((prev) => [...prev, { role: "assistant", content: respuesta }])
+        setIsLoading(false)
+        return
+      }
+
+      // Si tenemos un número de cita almacenado, intentar consultar la información
+      if (usuarioActual.numeroCita || citaQuery.numeroCita) {
+        const numeroCita = citaQuery.numeroCita || usuarioActual.numeroCita
+
+        try {
+          const citaData = await consultarCitaPorNumero(numeroCita!, usuarioActual.nombre, usuarioActual.doctorNombre)
+
+          if (citaData.success && citaData.data) {
+            // Formatear la respuesta con la información de la cita
+            let respuesta = ""
+
+            if (citaData.data.multiple) {
+              // Si hay múltiples citas, mostrar un resumen
+              respuesta = `Encontré ${citaData.data.length} citas con el número ${numeroCita}. `
+              respuesta +=
+                "Por favor proporciona más información como tu nombre completo o el nombre del doctor para ayudarte mejor."
+            } else {
+              // Si es una sola cita, mostrar los detalles
+              const cita = citaData.data
+
+              // Verificar si el mensaje pregunta específicamente por la hora
+              if (userMessage.toLowerCase().includes("hora")) {
+                respuesta = `Tu cita #${cita.numero_cita} con el Dr(a). ${cita.doctor.nombre} está programada para el ${cita.fecha} a las ${cita.hora}.`
+              } else {
+                respuesta = `He encontrado tu cita #${cita.numero_cita}:\n\n`
+                respuesta += `📅 Fecha: ${cita.fecha}\n`
+                respuesta += `🕒 Hora: ${cita.hora}\n`
+                respuesta += `👨‍⚕️ Doctor: ${cita.doctor.nombre} (${cita.doctor.especialidad})\n`
+                respuesta += `📋 Motivo: ${cita.motivo}\n`
+                respuesta += `🔄 Estado: ${cita.estado}\n\n`
+                respuesta +=
+                  "Por favor, llega 15 minutos antes de tu cita para completar el registro. ¿Necesitas algo más?"
+              }
+            }
+
+            setMessages((prev) => [...prev, { role: "assistant", content: respuesta }])
+            setIsLoading(false)
+            return
+          }
+        } catch (error) {
+          console.error("Error al consultar cita:", error)
+          // Si hay un error, continuamos con el flujo normal del chatbot
+        }
+      }
+    }
+
     try {
       // Intentar primero con el endpoint principal
       const response = await fetch("/api/chatbot/groq", {
@@ -240,8 +481,6 @@ export function ChatbotWidget() {
           mensaje: userMessage,
           conversationHistory: messages.slice(-5), // Enviar las últimas 5 mensajes para contexto
         }),
-        // Agregar un timeout para evitar esperas largas
-        signal: AbortSignal.timeout(8000),
       })
 
       if (!response.ok) {
@@ -282,8 +521,6 @@ export function ChatbotWidget() {
             query: userMessage,
             conversationHistory: messages.slice(-5), // Enviar las últimas 5 mensajes para contexto
           }),
-          // Agregar un timeout para el fallback también
-          signal: AbortSignal.timeout(5000),
         })
 
         if (!fallbackResponse.ok) {
@@ -352,6 +589,7 @@ export function ChatbotWidget() {
     setMessages([])
     setIsError(false)
     setPreciosMencionados([]) // Resetear los precios mencionados
+    setUsuarioActual({}) // Resetear la información del usuario
     // El mensaje de bienvenida se agregará automáticamente por el useEffect
   }
 

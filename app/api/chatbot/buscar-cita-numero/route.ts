@@ -3,8 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase"
 
 export async function POST(request: Request) {
   try {
-    const { numeroCita } = await request.json()
-    console.log("Buscando cita con número:", numeroCita)
+    const { numeroCita, nombrePaciente, doctorNombre } = await request.json()
 
     if (!numeroCita) {
       return NextResponse.json({ success: false, error: "Se requiere un número de cita" }, { status: 400 })
@@ -12,8 +11,8 @@ export async function POST(request: Request) {
 
     const supabase = createServerSupabaseClient()
 
-    // Primero intentamos una búsqueda exacta
-    let { data: citasExactas, error: errorExacto } = await supabase
+    // Consulta base para buscar citas por número
+    let query = supabase
       .from("citas")
       .select(`
         id,
@@ -22,13 +21,13 @@ export async function POST(request: Request) {
         motivo,
         estado,
         numero_cita,
-        pacientes (
+        paciente:paciente_id (
           id,
           nombre,
           telefono,
           email
         ),
-        doctores (
+        doctor:doctor_id (
           id,
           nombre,
           especialidad
@@ -36,78 +35,74 @@ export async function POST(request: Request) {
       `)
       .eq("numero_cita", numeroCita)
 
-    // Si no hay resultados exactos, intentamos una búsqueda parcial
-    if ((!citasExactas || citasExactas.length === 0) && !errorExacto) {
-      const { data: citasParciales, error: errorParcial } = await supabase
-        .from("citas")
-        .select(`
-          id,
-          fecha,
-          hora,
-          motivo,
-          estado,
-          numero_cita,
-          pacientes (
-            id,
-            nombre,
-            telefono,
-            email
-          ),
-          doctores (
-            id,
-            nombre,
-            especialidad
-          )
-        `)
-        .ilike("numero_cita", `%${numeroCita}%`)
+    // Filtrar por nombre de paciente si se proporciona
+    if (nombrePaciente) {
+      // Buscar pacientes con nombre similar
+      const { data: pacientes } = await supabase.from("pacientes").select("id").ilike("nombre", `%${nombrePaciente}%`)
 
-      if (errorParcial) {
-        console.error("Error en búsqueda parcial:", errorParcial)
-      } else if (citasParciales && citasParciales.length > 0) {
-        citasExactas = citasParciales
+      if (pacientes && pacientes.length > 0) {
+        const pacienteIds = pacientes.map((p) => p.id)
+        query = query.in("paciente_id", pacienteIds)
       }
     }
 
-    if (errorExacto) {
-      console.error("Error al buscar cita:", errorExacto)
+    // Filtrar por nombre de doctor si se proporciona
+    if (doctorNombre) {
+      // Buscar doctores con nombre similar
+      const { data: doctores } = await supabase.from("doctores").select("id").ilike("nombre", `%${doctorNombre}%`)
+
+      if (doctores && doctores.length > 0) {
+        const doctorIds = doctores.map((d) => d.id)
+        query = query.in("doctor_id", doctorIds)
+      }
+    }
+
+    // Ejecutar la consulta
+    const { data: citas, error } = await query
+
+    if (error) {
+      console.error("Error al consultar citas:", error)
+      return NextResponse.json({ success: false, error: "Error al consultar la base de datos" }, { status: 500 })
+    }
+
+    if (!citas || citas.length === 0) {
       return NextResponse.json(
-        { success: false, error: "Error al buscar la cita en la base de datos" },
-        { status: 500 },
+        { success: false, error: `No se encontró ninguna cita con el número ${numeroCita}` },
+        { status: 404 },
       )
     }
 
-    if (!citasExactas || citasExactas.length === 0) {
-      console.log("No se encontró ninguna cita con el número:", numeroCita)
-      return NextResponse.json({ success: false, error: "No se encontró ninguna cita con ese número" }, { status: 404 })
+    // Si hay múltiples citas, devolver información básica
+    if (citas.length > 1) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          multiple: true,
+          length: citas.length,
+          message: "Se encontraron múltiples citas con ese número",
+        },
+      })
     }
 
-    // Formatear las citas encontradas
-    const citasFormateadas = citasExactas.map((cita) => ({
-      numeroCita: cita.numero_cita,
-      fecha: cita.fecha,
-      hora: cita.hora,
-      motivo: cita.motivo,
-      estado: cita.estado,
-      paciente: {
-        nombre: cita.pacientes?.nombre || "Paciente sin nombre",
-        telefono: cita.pacientes?.telefono || "No disponible",
-        email: cita.pacientes?.email || "No disponible",
-      },
-      doctor: {
-        nombre: cita.doctores?.nombre || "Doctor no asignado",
-        especialidad: cita.doctores?.especialidad || "No especificada",
-      },
-    }))
-
-    console.log("Citas encontradas:", citasFormateadas.length)
+    // Formatear la fecha para que sea más legible
+    const cita = citas[0]
+    if (cita.fecha) {
+      const fecha = new Date(cita.fecha)
+      const options: Intl.DateTimeFormatOptions = {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        weekday: "long",
+      }
+      cita.fecha = fecha.toLocaleDateString("es-ES", options)
+    }
 
     return NextResponse.json({
       success: true,
-      data: citasFormateadas.length === 1 ? citasFormateadas[0] : citasFormateadas,
-      multiple: citasFormateadas.length > 1,
+      data: cita,
     })
   } catch (error) {
-    console.error("Error en la búsqueda de cita por número:", error)
-    return NextResponse.json({ success: false, error: "Error al procesar la búsqueda de cita" }, { status: 500 })
+    console.error("Error en el endpoint de buscar cita por número:", error)
+    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
   }
 }

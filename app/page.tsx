@@ -49,7 +49,7 @@ export default function Home() {
       </section>
 
       {/* Services Preview */}
-      <section className="py-12 md:py-16 bg-sky-50">
+      <section className="py-12 md:py-16 bg-gradient-to-b from-white to-sky-50">
         <div className="container px-4 md:px-6">
           <div className="flex flex-col items-center justify-center space-y-4 text-center">
             <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl text-sky-700">
@@ -123,7 +123,9 @@ export default function Home() {
                 <Button className="bg-white text-sky-600 hover:bg-sky-100">Gestionar Citas</Button>
               </Link>
               <Link href="/contacto">
-                <Button className="bg-white text-sky-600 hover:bg-sky-100 border-2 border-white">Contactar</Button>
+                <Button variant="outline" className="bg-transparent text-white border-white hover:bg-white/10">
+                  Contactar
+                </Button>
               </Link>
             </div>
           </div>
