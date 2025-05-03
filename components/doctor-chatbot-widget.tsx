@@ -58,7 +58,7 @@ export function DoctorChatbotWidget() {
         setMessages([
           {
             role: "assistant",
-            content: `¡Bienvenido Dr(a). ${doctorNombre}! Soy su asistente virtual del Centro Médico. Puede preguntarme sobre sus citas diciendo "muestra mis citas de hoy" o "cuáles son mis próximas citas". ¿En qué puedo ayudarle?`,
+            content: `¡Bienvenido Dr(a). ${doctorNombre}! Soy su asistente virtual. ¿En qué puedo ayudarle hoy?`,
           },
         ])
       }
@@ -708,16 +708,7 @@ export function DoctorChatbotWidget() {
           try {
             const citaData = await consultarCitaPorNumero(numeroCita)
 
-            const respuesta = `He encontrado la cita #${citaData.numeroCita}:
-            
-Paciente: ${citaData.paciente.nombre}
-Fecha: ${citaData.fecha}
-Hora: ${citaData.hora}
-Doctor: ${citaData.doctor.nombre} (${citaData.doctor.especialidad})
-Motivo: ${citaData.motivo}
-Estado: ${citaData.estado}
-
-Para más detalles, puede revisar el expediente completo del paciente en el sistema.`
+            const respuesta = `Cita #${citaData.numeroCita}: Paciente ${citaData.paciente.nombre}, ${citaData.fecha} a las ${citaData.hora} con Dr(a). ${citaData.doctor.nombre}. Motivo: ${citaData.motivo}. Estado: ${citaData.estado}.`
 
             setMessages((prev) => [...prev, { role: "assistant", content: respuesta }])
             setIsLoading(false)
@@ -727,7 +718,7 @@ Para más detalles, puede revisar el expediente completo del paciente en el sist
               ...prev,
               {
                 role: "assistant",
-                content: `No pude encontrar ninguna cita con el número ${numeroCita}. Por favor, verifique el número e intente nuevamente.`,
+                content: `No encontré cita #${numeroCita}. Verifique el número e intente nuevamente.`,
               },
             ])
             setIsLoading(false)
@@ -738,8 +729,7 @@ Para más detalles, puede revisar el expediente completo del paciente en el sist
             ...prev,
             {
               role: "assistant",
-              content:
-                "Para consultar información sobre una cita, por favor indique el número de cita de 4 dígitos (por ejemplo: 'Buscar cita 0042').",
+              content: "Para consultar una cita, indique el número de 4 dígitos (ej: 'Buscar cita 0042').",
             },
           ])
           setIsLoading(false)
@@ -753,33 +743,25 @@ Para más detalles, puede revisar el expediente completo del paciente en el sist
           const citasData = await consultarCita(fecha, hora, tipo)
 
           if (citasData && citasData.length > 0) {
-            let respuesta = `He encontrado ${citasData.length} cita(s) para el ${fecha}`
-            if (hora) respuesta += ` a las ${hora}`
-            if (tipo) respuesta += ` relacionada con ${tipo}`
-            respuesta += ":\n\n"
+            let respuesta = `${citasData.length} cita(s) para ${fecha}${hora ? ` a las ${hora}` : ""}${tipo ? ` (${tipo})` : ""}:`
 
-            citasData.forEach((cita: any, index: number) => {
-              respuesta += `${index + 1}. Paciente: ${cita.paciente.nombre}\n`
-              respuesta += `   Hora: ${cita.hora}\n`
-              respuesta += `   Motivo: ${cita.motivo}\n`
-              respuesta += `   Doctor: ${cita.doctor.nombre} (${cita.doctor.especialidad})\n`
-              respuesta += `   Estado: ${cita.estado}\n\n`
+            citasData.slice(0, 3).forEach((cita: any, index: number) => {
+              respuesta += `\n${index + 1}. Paciente: ${cita.paciente.nombre}, Dr: ${cita.doctor.nombre}, Hora: ${cita.hora}`
             })
+
+            if (citasData.length > 3) {
+              respuesta += `\n...y ${citasData.length - 3} más.`
+            }
 
             setMessages((prev) => [...prev, { role: "assistant", content: respuesta }])
             setIsLoading(false)
             return
           } else {
-            // No se encontraron citas, continuar con la respuesta normal del chatbot
             setMessages((prev) => [
               ...prev,
               {
                 role: "assistant",
-                content: `No encontré citas programadas para el ${fecha}${hora ? ` a las ${hora}` : ""}${
-                  tipo ? ` relacionadas con ${tipo}` : ""
-                }. ¿Puedo ayudarte con algo más?  : ""}${
-                  tipo ? ` relacionadas con ${tipo}` : ""
-                }. ¿Puedo ayudarte con algo más?`,
+                content: `No hay citas para ${fecha}${hora ? ` a las ${hora}` : ""}${tipo ? ` relacionadas con ${tipo}` : ""}.`,
               },
             ])
             setIsLoading(false)
@@ -787,20 +769,19 @@ Para más detalles, puede revisar el expediente completo del paciente en el sist
           }
         } catch (error) {
           console.error("Error al consultar citas:", error)
-          // Continuar con la respuesta normal del chatbot
         }
       }
 
       try {
         // Procesar con el chatbot específico para doctores
-        const response = await fetch("/api/chatbot/fallback", {
+        const response = await fetch("/api/chatbot/groq-doctor", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            query: userMessage,
-            conversationHistory: messages.slice(-6), // Enviar solo las últimas 6 mensajes para contexto
+            mensaje: userMessage,
+            conversationHistory: messages.slice(-4), // Enviar solo los últimos 4 mensajes para contexto
             medicoNombre,
             medicoId,
           }),
@@ -830,7 +811,7 @@ Para más detalles, puede revisar el expediente completo del paciente en el sist
             },
             body: JSON.stringify({
               query: userMessage,
-              conversationHistory: messages.slice(-5), // Enviar las últimas 5 mensajes para contexto
+              conversationHistory: messages.slice(-3), // Enviar las últimas 3 mensajes para contexto
             }),
           })
 
@@ -844,8 +825,7 @@ Para más detalles, puede revisar el expediente completo del paciente en el sist
           // Agregar un mensaje de error amigable
           const errorMessage = {
             role: "assistant",
-            content:
-              "Lo siento, estoy teniendo problemas para conectarme. Por favor, intenta de nuevo más tarde o utiliza las funciones del panel directamente.",
+            content: "Lo siento, estoy teniendo problemas para conectarme. Intente nuevamente más tarde.",
           }
           setMessages((prev) => [...prev, errorMessage])
         }
@@ -856,8 +836,7 @@ Para más detalles, puede revisar el expediente completo del paciente en el sist
         ...prev,
         {
           role: "assistant",
-          content:
-            "Lo siento, estoy teniendo problemas para responder. Por favor, intenta de nuevo o comunícate directamente al 4644-9158.",
+          content: "Lo siento, estoy teniendo problemas para responder. Intente nuevamente o llame al 4644-9158.",
         },
       ])
     } finally {
