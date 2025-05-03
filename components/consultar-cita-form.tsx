@@ -93,8 +93,7 @@ export function ConsultarCitaForm() {
       setCita(data.data)
       setSuccess(true)
     } catch (error) {
-      console.error("Error al buscar cita:", error)
-      setError(error instanceof Error ? error.message : "Ha ocurrido un error inesperado")
+      setError("Ha ocurrido un error inesperado al buscar la cita")
     } finally {
       setIsLoading(false)
     }
@@ -111,6 +110,15 @@ export function ConsultarCitaForm() {
         return "text-red-600 bg-red-50"
       default:
         return "text-gray-600 bg-gray-50"
+    }
+  }
+
+  // Función para formatear la fecha de manera segura
+  const formatFecha = (fechaStr: string) => {
+    try {
+      return format(new Date(fechaStr), "PPPP", { locale: es })
+    } catch (error) {
+      return fechaStr || "Fecha no disponible"
     }
   }
 
@@ -163,7 +171,7 @@ export function ConsultarCitaForm() {
                   <Calendar className="h-5 w-5 text-sky-500 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="font-medium">Fecha</p>
-                    <p className="text-gray-600">{format(new Date(cita.fecha), "PPPP", { locale: es })}</p>
+                    <p className="text-gray-600">{formatFecha(cita.fecha)}</p>
                   </div>
                 </div>
 
@@ -171,7 +179,7 @@ export function ConsultarCitaForm() {
                   <Clock className="h-5 w-5 text-sky-500 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="font-medium">Hora</p>
-                    <p className="text-gray-600">{cita.hora}</p>
+                    <p className="text-gray-600">{cita.hora || "Hora no disponible"}</p>
                   </div>
                 </div>
 
@@ -179,7 +187,7 @@ export function ConsultarCitaForm() {
                   <User className="h-5 w-5 text-sky-500 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="font-medium">Paciente</p>
-                    <p className="text-gray-600">{cita.paciente.nombre}</p>
+                    <p className="text-gray-600">{cita.paciente?.nombre || "Nombre no disponible"}</p>
                   </div>
                 </div>
 
@@ -188,7 +196,8 @@ export function ConsultarCitaForm() {
                   <div>
                     <p className="font-medium">Doctor</p>
                     <p className="text-gray-600">
-                      {cita.doctor.nombre} ({cita.doctor.especialidad})
+                      {cita.doctor?.nombre || "Nombre no disponible"}
+                      {cita.doctor?.especialidad ? ` (${cita.doctor.especialidad})` : ""}
                     </p>
                   </div>
                 </div>
@@ -197,15 +206,15 @@ export function ConsultarCitaForm() {
                   <FileText className="h-5 w-5 text-sky-500 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="font-medium">Motivo</p>
-                    <p className="text-gray-600">{cita.motivo}</p>
+                    <p className="text-gray-600">{cita.motivo || "Motivo no disponible"}</p>
                   </div>
                 </div>
               </div>
 
               <div className="pt-2 border-t">
                 <p className="font-medium mb-2">Estado de la cita:</p>
-                <div className={`inline-block px-3 py-1 rounded-full font-medium ${getEstadoColor(cita.estado)}`}>
-                  {cita.estado.charAt(0).toUpperCase() + cita.estado.slice(1)}
+                <div className={`inline-block px-3 py-1 rounded-full font-medium ${getEstadoColor(cita.estado || "")}`}>
+                  {cita.estado ? cita.estado.charAt(0).toUpperCase() + cita.estado.slice(1) : "Estado no disponible"}
                 </div>
               </div>
             </div>
