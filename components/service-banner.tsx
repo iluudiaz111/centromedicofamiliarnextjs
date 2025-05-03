@@ -25,7 +25,13 @@ export function ServiceBanner({ imageSrc, imageAlt, title, description, linkHref
           </div>
         </div>
         <div className="md:w-1/2 h-48 md:h-auto relative">
-          <Image src={imageSrc || "/placeholder.svg"} alt={imageAlt} fill className="object-cover" />
+          <Image
+            src={imageSrc || "/placeholder.svg"}
+            alt={imageAlt}
+            fill
+            className="object-cover"
+            unoptimized={imageSrc.startsWith("http")}
+          />
         </div>
       </div>
     </div>

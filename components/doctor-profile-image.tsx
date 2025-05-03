@@ -74,7 +74,11 @@ export function DoctorProfileImage({ doctorId, initialImageUrl, doctorName }: Do
     <div className="flex flex-col items-center">
       <div className="relative">
         <Avatar className="w-32 h-32">
-          <AvatarImage src={imageUrl || "/placeholder.svg"} alt={doctorName} />
+          <AvatarImage
+            src={imageUrl || "/placeholder.svg"}
+            alt={doctorName}
+            unoptimized={imageUrl?.startsWith("http")}
+          />
           <AvatarFallback className="text-2xl bg-sky-100 text-sky-800">{getInitials(doctorName)}</AvatarFallback>
         </Avatar>
 

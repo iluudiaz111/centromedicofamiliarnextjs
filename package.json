@@ -59,10 +59,10 @@
     "vaul": "^0.9.6",
     "zod": "latest",
     "@supabase/supabase-js": "latest",
-    "uuid": "latest",
     "@ai-sdk/groq": "latest",
     "@supabase/auth-helpers-nextjs": "latest",
-    "ai": "latest"
+    "ai": "latest",
+    "uuid": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

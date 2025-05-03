@@ -48,6 +48,7 @@ export function ImageCarousel({ images, autoSlideInterval = 5000 }: ImageCarouse
             fill
             className="object-cover"
             priority={index === 0}
+            unoptimized={image.src.startsWith("http")}
           />
         </div>
       ))}
